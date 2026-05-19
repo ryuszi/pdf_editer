@@ -16,7 +16,8 @@ type PdfPageViewProps = {
 
 type DragState =
   | { mode: "move"; startX: number; startY: number; initial: FormulaSelection }
-  | { mode: "resize"; startX: number; startY: number; initial: FormulaSelection };
+  | { mode: "resize"; startX: number; startY: number; initial: FormulaSelection }
+  | { mode: "create"; startCanvasX: number; startCanvasY: number };
 
 export function PdfPageView({ pdf, doc, pageNumber, zoom }: PdfPageViewProps) {
   const pageRef = useRef<HTMLDivElement | null>(null);
@@ -119,27 +120,26 @@ export function PdfPageView({ pdf, doc, pageNumber, zoom }: PdfPageViewProps) {
     return () => window.removeEventListener("pdf-editor:recognize-formula", handler);
   }, [formulaSelection, pageNumber, pdf.id, recognizeSelection]);
 
-  const startSelection = (event: React.MouseEvent<HTMLDivElement>) => {
-    if (!formulaMode || event.defaultPrevented) return;
+  const startSelection = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!formulaMode || event.defaultPrevented || event.button !== 0) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    const x = (event.clientX - rect.left) * scaleX;
-    const y = (event.clientY - rect.top) * scaleY;
-    const width = Math.min(canvas.width * 0.58, 520);
-    const height = Math.min(canvas.height * 0.18, 190);
+    const point = getCanvasPoint(canvas, event.clientX, event.clientY);
     const selection: FormulaSelection = {
       pdfId: pdf.id,
       pageNumber,
-      x: Math.max(0, x - width / 2),
-      y: Math.max(0, y - height / 2),
-      width,
-      height
+      x: point.x,
+      y: point.y,
+      width: 1,
+      height: 1
     };
-    setFormulaSelection(clampSelection(selection, canvas.width, canvas.height));
-    recognizeSelection(clampSelection(selection, canvas.width, canvas.height));
+    event.currentTarget.setPointerCapture(event.pointerId);
+    dragRef.current = {
+      mode: "create",
+      startCanvasX: point.x,
+      startCanvasY: point.y
+    };
+    setFormulaSelection(selection);
   };
 
   const activeSelection =
@@ -155,6 +155,26 @@ export function PdfPageView({ pdf, doc, pageNumber, zoom }: PdfPageViewProps) {
     const canvas = canvasRef.current;
     const drag = dragRef.current;
     if (!canvas || !drag) return;
+    const point = getCanvasPoint(canvas, event.clientX, event.clientY);
+
+    if (drag.mode === "create") {
+      setFormulaSelection(
+        normalizeSelection(
+          {
+            pdfId: pdf.id,
+            pageNumber,
+            x: drag.startCanvasX,
+            y: drag.startCanvasY,
+            width: point.x - drag.startCanvasX,
+            height: point.y - drag.startCanvasY
+          },
+          canvas.width,
+          canvas.height
+        )
+      );
+      return;
+    }
+
     const rect = canvas.getBoundingClientRect();
     const dx = (event.clientX - drag.startX) * (canvas.width / rect.width);
     const dy = (event.clientY - drag.startY) * (canvas.height / rect.height);
@@ -169,16 +189,38 @@ export function PdfPageView({ pdf, doc, pageNumber, zoom }: PdfPageViewProps) {
     setFormulaSelection(clampSelection(next, canvas.width, canvas.height));
   };
 
+  const handlePointerUp = () => {
+    const drag = dragRef.current;
+    const canvas = canvasRef.current;
+    const latest = usePdfStore.getState().formulaSelection;
+    dragRef.current = null;
+    if (
+      drag?.mode === "create" &&
+      canvas &&
+      latest?.pdfId === pdf.id &&
+      latest.pageNumber === pageNumber
+    ) {
+      const selection = clampSelection(latest, canvas.width, canvas.height);
+      if (selection.width >= 24 && selection.height >= 18) {
+        setFormulaSelection(selection);
+        recognizeSelection(selection);
+      } else {
+        setFormulaResult({
+          status: "error",
+          error: "数式を囲むように、始点から終点までドラッグして範囲を選択してください"
+        });
+      }
+    }
+  };
+
   return (
     <div
       ref={pageRef}
       className="mb-8 flex justify-center"
       data-page-number={pageNumber}
-      onClick={startSelection}
+      onPointerDown={startSelection}
       onPointerMove={handlePointerMove}
-      onPointerUp={() => {
-        dragRef.current = null;
-      }}
+      onPointerUp={handlePointerUp}
       onPointerCancel={() => {
         dragRef.current = null;
       }}
@@ -215,6 +257,7 @@ export function PdfPageView({ pdf, doc, pageNumber, zoom }: PdfPageViewProps) {
             style={overlay}
             onClick={(event) => event.preventDefault()}
             onPointerDown={(event) => {
+              event.stopPropagation();
               event.currentTarget.setPointerCapture(event.pointerId);
               dragRef.current = {
                 mode: "move",
@@ -270,6 +313,34 @@ function clampSelection(
     height,
     x: Math.min(Math.max(0, selection.x), Math.max(0, canvasWidth - width)),
     y: Math.min(Math.max(0, selection.y), Math.max(0, canvasHeight - height))
+  };
+}
+
+function normalizeSelection(
+  selection: FormulaSelection,
+  canvasWidth: number,
+  canvasHeight: number
+): FormulaSelection {
+  const x = selection.width < 0 ? selection.x + selection.width : selection.x;
+  const y = selection.height < 0 ? selection.y + selection.height : selection.y;
+  return clampSelection(
+    {
+      ...selection,
+      x,
+      y,
+      width: Math.abs(selection.width),
+      height: Math.abs(selection.height)
+    },
+    canvasWidth,
+    canvasHeight
+  );
+}
+
+function getCanvasPoint(canvas: HTMLCanvasElement, clientX: number, clientY: number) {
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: Math.min(Math.max(0, (clientX - rect.left) * (canvas.width / rect.width)), canvas.width),
+    y: Math.min(Math.max(0, (clientY - rect.top) * (canvas.height / rect.height)), canvas.height)
   };
 }
 

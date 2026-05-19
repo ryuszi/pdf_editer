@@ -8,6 +8,7 @@ import { SplitPanel } from "@/components/operations/SplitPanel";
 import { MergePanel } from "@/components/operations/MergePanel";
 import { SearchPanel } from "@/components/operations/SearchPanel";
 import { FormulaPanel } from "@/components/operations/FormulaPanel";
+import { usePdfStore } from "@/store/usePdfStore";
 
 type RightPanelProps = {
   activePdf: UploadedPdf | null;
@@ -26,6 +27,14 @@ type TabId = (typeof tabs)[number]["id"];
 
 export function RightPanel({ activePdf }: RightPanelProps) {
   const [activeTab, setActiveTab] = useState<TabId>("cut");
+  const setFormulaMode = usePdfStore((state) => state.setFormulaMode);
+
+  const selectTab = (tabId: TabId) => {
+    setActiveTab(tabId);
+    if (tabId === "formula") {
+      setFormulaMode(true);
+    }
+  };
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -37,7 +46,7 @@ export function RightPanel({ activePdf }: RightPanelProps) {
               activeTab === tab.id ? "bg-ink text-white" : "bg-slate-100 hover:bg-slate-200"
             }`}
             type="button"
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => selectTab(tab.id)}
           >
             {tab.label}
           </button>
