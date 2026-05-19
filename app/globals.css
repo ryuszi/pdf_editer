@@ -1,0 +1,73 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  background: #f7f8fb;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  color: #17202a;
+  background: #f7f8fb;
+  font-family:
+    Arial,
+    "Hiragino Sans",
+    "Yu Gothic",
+    "Meiryo",
+    sans-serif;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: #a7b0bf transparent;
+}
+
+.pdf-page-canvas {
+  display: block;
+  background: white;
+}
+
+.katex-display {
+  margin: 0;
+}
+
+@layer components {
+  .field {
+    @apply w-full rounded-md border border-line bg-white px-3 py-2 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-blue-100;
+  }
+
+  .primary-btn {
+    @apply h-9 rounded-md bg-accent px-3 text-sm font-medium text-white hover:bg-blue-700 disabled:hover:bg-accent;
+  }
+
+  .secondary-btn {
+    @apply h-9 rounded-md border border-line bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:hover:bg-white;
+  }
+
+  .danger-btn {
+    @apply h-9 rounded-md bg-berry px-3 text-sm font-medium text-white hover:bg-rose-800 disabled:hover:bg-berry;
+  }
+}

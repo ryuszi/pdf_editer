@@ -1,0 +1,12 @@
+packages:
+  - .
+
+allowBuilds:
+  sharp: false
+  tesseract.js: false
+  unrs-resolver: false
+
+ignoredBuiltDependencies:
+  - sharp
+  - tesseract.js
+  - unrs-resolver
