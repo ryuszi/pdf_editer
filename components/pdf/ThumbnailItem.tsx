@@ -13,6 +13,7 @@ type ThumbnailItemProps = {
 
 export function ThumbnailItem({ pdf, doc, pageNumber }: ThumbnailItemProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const renderTaskRef = useRef<{ cancel: () => void } | null>(null);
   const selected = pdf.selectedPages.includes(pageNumber);
   const currentPage = usePdfStore((state) => state.currentPage);
   const setCurrentPage = usePdfStore((state) => state.setCurrentPage);
@@ -20,23 +21,36 @@ export function ThumbnailItem({ pdf, doc, pageNumber }: ThumbnailItemProps) {
 
   useEffect(() => {
     let cancelled = false;
+    renderTaskRef.current?.cancel();
+    renderTaskRef.current = null;
     const render = async () => {
       const canvas = canvasRef.current;
       if (!canvas) return;
-      const page = await doc.getPage(pageNumber);
-      if (cancelled) return;
-      const baseViewport = page.getViewport({ scale: 1 });
-      const scale = 132 / baseViewport.width;
-      const viewport = page.getViewport({ scale });
-      const context = canvas.getContext("2d");
-      if (!context) return;
-      canvas.width = Math.floor(viewport.width);
-      canvas.height = Math.floor(viewport.height);
-      await page.render({ canvas, canvasContext: context, viewport }).promise;
+      try {
+        const page = await doc.getPage(pageNumber);
+        if (cancelled) return;
+        const baseViewport = page.getViewport({ scale: 1 });
+        const scale = 132 / baseViewport.width;
+        const viewport = page.getViewport({ scale });
+        const context = canvas.getContext("2d");
+        if (!context) return;
+        canvas.width = Math.floor(viewport.width);
+        canvas.height = Math.floor(viewport.height);
+        const renderTask = page.render({ canvas, canvasContext: context, viewport });
+        renderTaskRef.current = renderTask;
+        await renderTask.promise;
+      } catch (caught) {
+        if (!isPdfRenderCancellation(caught)) {
+          throw caught;
+        }
+      } finally {
+        if (renderTaskRef.current) renderTaskRef.current = null;
+      }
     };
     render();
     return () => {
       cancelled = true;
+      renderTaskRef.current?.cancel();
     };
   }, [doc, pageNumber]);
 
@@ -75,5 +89,13 @@ export function ThumbnailItem({ pdf, doc, pageNumber }: ThumbnailItemProps) {
         <canvas ref={canvasRef} className="mx-auto block" />
       </button>
     </div>
+  );
+}
+
+function isPdfRenderCancellation(caught: unknown) {
+  return (
+    caught instanceof Error &&
+    (caught.name === "RenderingCancelledException" ||
+      caught.message.toLowerCase().includes("cancelled"))
   );
 }

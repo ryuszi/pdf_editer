@@ -20,6 +20,7 @@ type DragState =
 
 export function PdfPageView({ pdf, doc, pageNumber, zoom }: PdfPageViewProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const renderTaskRef = useRef<{ cancel: () => void } | null>(null);
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
   const [rendering, setRendering] = useState(false);
   const dragRef = useRef<DragState | null>(null);
@@ -30,26 +31,37 @@ export function PdfPageView({ pdf, doc, pageNumber, zoom }: PdfPageViewProps) {
 
   useEffect(() => {
     let cancelled = false;
+    renderTaskRef.current?.cancel();
+    renderTaskRef.current = null;
     const render = async () => {
       const canvas = canvasRef.current;
       if (!canvas) return;
       setRendering(true);
       try {
         const page = await doc.getPage(pageNumber);
+        if (cancelled) return;
         const viewport = page.getViewport({ scale: zoom * 1.3 });
         const context = canvas.getContext("2d");
         if (!context) return;
         canvas.width = Math.floor(viewport.width);
         canvas.height = Math.floor(viewport.height);
         setCanvasSize({ width: canvas.width, height: canvas.height });
-        await page.render({ canvas, canvasContext: context, viewport }).promise;
+        const renderTask = page.render({ canvas, canvasContext: context, viewport });
+        renderTaskRef.current = renderTask;
+        await renderTask.promise;
+      } catch (caught) {
+        if (!isPdfRenderCancellation(caught)) {
+          throw caught;
+        }
       } finally {
+        if (renderTaskRef.current) renderTaskRef.current = null;
         if (!cancelled) setRendering(false);
       }
     };
     render();
     return () => {
       cancelled = true;
+      renderTaskRef.current?.cancel();
     };
   }, [doc, pageNumber, zoom]);
 
@@ -223,4 +235,12 @@ function clampSelection(
     x: Math.min(Math.max(0, selection.x), Math.max(0, canvasWidth - width)),
     y: Math.min(Math.max(0, selection.y), Math.max(0, canvasHeight - height))
   };
+}
+
+function isPdfRenderCancellation(caught: unknown) {
+  return (
+    caught instanceof Error &&
+    (caught.name === "RenderingCancelledException" ||
+      caught.message.toLowerCase().includes("cancelled"))
+  );
 }
