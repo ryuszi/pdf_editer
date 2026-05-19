@@ -13,6 +13,8 @@ type PdfViewerProps = {
 
 export function PdfViewer({ pdf }: PdfViewerProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const scrollFrameRef = useRef<number | null>(null);
+  const scrollDrivenPageChangeRef = useRef(false);
   const [doc, setDoc] = useState<PDFDocumentProxy | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -65,10 +67,22 @@ export function PdfViewer({ pdf }: PdfViewerProps) {
     const pageElement = containerRef.current?.querySelector<HTMLElement>(
       `[data-page-number="${currentPage}"]`
     );
+    if (scrollDrivenPageChangeRef.current) {
+      scrollDrivenPageChangeRef.current = false;
+      return;
+    }
     pageElement?.scrollIntoView({ block: "start", behavior: "smooth" });
   }, [currentPage, pdf.id]);
 
   const handleScroll = () => {
+    if (scrollFrameRef.current !== null) return;
+    scrollFrameRef.current = window.requestAnimationFrame(() => {
+      scrollFrameRef.current = null;
+      updateCurrentPageFromScroll();
+    });
+  };
+
+  const updateCurrentPageFromScroll = () => {
     const container = containerRef.current;
     if (!container) return;
     const pages = Array.from(
@@ -84,7 +98,10 @@ export function PdfViewer({ pdf }: PdfViewerProps) {
         bestPage = Number(page.dataset.pageNumber);
       }
     }
-    if (bestPage && bestPage !== currentPage) setCurrentPage(bestPage);
+    if (bestPage && bestPage !== currentPage) {
+      scrollDrivenPageChangeRef.current = true;
+      setCurrentPage(bestPage);
+    }
   };
 
   return (
@@ -97,7 +114,7 @@ export function PdfViewer({ pdf }: PdfViewerProps) {
       </div>
       <div
         ref={containerRef}
-        className="min-h-0 flex-1 overflow-auto p-8 scrollbar-thin"
+        className="min-h-0 flex-1 overflow-auto scroll-smooth p-8 scrollbar-thin"
         onScroll={handleScroll}
       >
         {loading ? <p className="text-sm text-slate-600">PDFを描画しています...</p> : null}

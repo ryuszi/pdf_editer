@@ -19,10 +19,12 @@ type DragState =
   | { mode: "resize"; startX: number; startY: number; initial: FormulaSelection };
 
 export function PdfPageView({ pdf, doc, pageNumber, zoom }: PdfPageViewProps) {
+  const pageRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const renderTaskRef = useRef<{ cancel: () => void } | null>(null);
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
   const [rendering, setRendering] = useState(false);
+  const [isNearViewport, setIsNearViewport] = useState(false);
   const dragRef = useRef<DragState | null>(null);
   const formulaMode = usePdfStore((state) => state.formulaMode);
   const formulaSelection = usePdfStore((state) => state.formulaSelection);
@@ -30,6 +32,23 @@ export function PdfPageView({ pdf, doc, pageNumber, zoom }: PdfPageViewProps) {
   const setFormulaResult = usePdfStore((state) => state.setFormulaResult);
 
   useEffect(() => {
+    const pageElement = pageRef.current;
+    if (!pageElement) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setIsNearViewport(entry.isIntersecting),
+      { root: null, rootMargin: "900px 0px", threshold: 0.01 }
+    );
+    observer.observe(pageElement);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!isNearViewport) {
+      renderTaskRef.current?.cancel();
+      renderTaskRef.current = null;
+      setRendering(false);
+      return;
+    }
     let cancelled = false;
     renderTaskRef.current?.cancel();
     renderTaskRef.current = null;
@@ -63,7 +82,7 @@ export function PdfPageView({ pdf, doc, pageNumber, zoom }: PdfPageViewProps) {
       cancelled = true;
       renderTaskRef.current?.cancel();
     };
-  }, [doc, pageNumber, zoom]);
+  }, [doc, isNearViewport, pageNumber, zoom]);
 
   const recognizeSelection = useCallback(
     async (selection: FormulaSelection) => {
@@ -152,6 +171,7 @@ export function PdfPageView({ pdf, doc, pageNumber, zoom }: PdfPageViewProps) {
 
   return (
     <div
+      ref={pageRef}
       className="mb-8 flex justify-center"
       data-page-number={pageNumber}
       onClick={startSelection}
@@ -163,8 +183,24 @@ export function PdfPageView({ pdf, doc, pageNumber, zoom }: PdfPageViewProps) {
         dragRef.current = null;
       }}
     >
-      <div className="relative">
-        <canvas ref={canvasRef} className="pdf-page-canvas shadow-page" />
+      <div
+        className="relative"
+        style={
+          canvasSize.width
+            ? { width: canvasSize.width, minHeight: canvasSize.height }
+            : { width: Math.round(595 * zoom), minHeight: Math.round(842 * zoom) }
+        }
+      >
+        <canvas
+          ref={canvasRef}
+          className="pdf-page-canvas shadow-page"
+          style={isNearViewport ? undefined : { visibility: "hidden" }}
+        />
+        {!isNearViewport && !canvasSize.width ? (
+          <div className="absolute inset-0 flex items-center justify-center rounded bg-white text-xs text-slate-400 shadow-page">
+            p{pageNumber}
+          </div>
+        ) : null}
         {rendering ? (
           <div className="absolute left-3 top-3 rounded bg-white/90 px-2 py-1 text-xs text-slate-600">
             rendering

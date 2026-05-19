@@ -7,14 +7,26 @@ export async function recognizeLatexImage(blob: Blob): Promise<LatexRecognitionR
   const formData = new FormData();
   formData.append("image", blob, "formula.png");
 
-  const response = await fetch(getLatexOcrEndpoint(), {
-    method: "POST",
-    body: formData
-  });
+  const endpoint = getLatexOcrEndpoint();
+  let response: Response;
+  try {
+    response = await fetch(endpoint, {
+      method: "POST",
+      body: formData
+    });
+  } catch {
+    throw new Error(
+      `LaTeX OCRサービスに接続できません。ローカルで start-latex-ocr.cmd を起動してから再試行してください。接続先: ${endpoint}`
+    );
+  }
 
-  const data = await response.json();
+  const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(data.error ?? "LaTeX OCRに失敗しました");
+    throw new Error(
+      data.error ??
+        data.detail ??
+        `LaTeX OCRに失敗しました。start-latex-ocr.cmd が起動中か確認してください。接続先: ${endpoint}`
+    );
   }
 
   return {
