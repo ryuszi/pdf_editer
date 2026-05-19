@@ -16,16 +16,61 @@
 
 ## 起動方法
 
+WindowsでこのCodex環境から使う場合は、まず次を実行してください。
+
+```powershell
+.\start-web.cmd
+```
+
+起動したらブラウザで開きます。
+
+```text
+http://127.0.0.1:3000
+```
+
+通常のNode.js/pnpm環境がある場合:
+
 ```bash
 pnpm install
 pnpm dev
 ```
 
-この環境で `pnpm` がない場合は、Node.jsとpnpmをインストールしてください。
+`pnpm.mjs` はpnpmを起動するための内部スクリプトです。VS Codeで開くファイルではありません。
+
+## GitHub Pagesで公開する
+
+GitHub Pagesは静的ホスティングなので、PDF編集、PDF表示、ブラウザ内OCR検索は公開URLで使えます。Next.jsのサーバーAPIは動かないため、数式LaTeX化はユーザーのPC上で `services/latex_ocr` を起動している場合のみ、公開ページから `http://127.0.0.1:8765/recognize` に接続します。
+
+GitHub Freeで `github.io` 公開する場合、GitHub Pagesの公開元リポジトリはPublicにする必要があります。PrivateリポジトリからPagesを使うにはGitHub Pro/Team等が必要です。
+
+デプロイ手順:
+
+1. GitHubで `pdf_editer` リポジトリをPublicにする、または有料プランでPrivate Pagesを使える状態にする。
+2. このリポジトリをpushする。
+3. GitHubの `Settings > Pages` で `Build and deployment` のSourceを `GitHub Actions` にする。
+4. `Deploy GitHub Pages` workflowが完了すると、次のURLで開けます。
+
+```text
+https://ryuszi.github.io/pdf_editer/
+```
+
+ローカルで静的exportを確認する場合:
+
+```bash
+pnpm build:pages
+```
 
 ## 数式LaTeX化サービス
 
 Mathpixは使いません。無料OSSのPix2Textをローカルで動かします。
+
+Windowsでは別のPowerShellまたはコマンドプロンプトで次を実行します。
+
+```powershell
+.\start-latex-ocr.cmd
+```
+
+手動で起動する場合:
 
 ```bash
 cd services/latex_ocr
